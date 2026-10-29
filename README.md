@@ -160,6 +160,16 @@ python -m pytest
 
 测试不联网，全部在临时目录运行；连续三遍通过。当前 88 个用例，最近一次三遍均为 `88 passed`。
 
+## 发布前还需要你做什么
+
+仓库目前只有本地提交，没有 remote、没有推送、没有发布。要真正公开，需要你决定并执行：
+
+1. 在 GitHub 创建仓库，添加 remote 并推送 `main` 和 `v0.1.0` 标签。
+2. 确认 README 里的截图、徽章和示例链接在你的仓库地址下可访问。
+3. 如果要发 PyPI，配置 `pypa/gh-action-pypi-publish` 或手动 `twine upload`；本项目没有配置自动上传。
+4. 按 `launch/` 草稿选择社区，先读版规再发；草稿里的 `<link>` 需要替换成真实地址。
+5. 重新确认 `LICENSE` 的版权人一行，按你的真实署名修改。
+
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。选择 MIT 而不是 AGPL：这是一个本地 CLI，价值在于被更多人安装和使用，没有需要通过网络服务回馈的 copyleft 场景；理由和取舍写在 [docs/deviations.md](docs/deviations.md#license)。
