@@ -78,7 +78,7 @@ def _line_text(tokens: list[Token]) -> str:
     return "".join(t.text for t in tokens).strip(" ")
 
 
-def best_layout(tokens: list[Token], max_width: int, max_lines: int) -> list[str] | None:
+def best_layout(tokens: list[Token], max_width: int, max_lines: int, rebalance: bool = True) -> list[str] | None:
     n = len(tokens)
     if n == 0:
         return []
@@ -132,7 +132,7 @@ def best_layout(tokens: list[Token], max_width: int, max_lines: int) -> list[str
         line = _line_text(tokens[left:right])
         if line:
             lines_out.append(line)
-    return _rebalance(lines_out)
+    return _rebalance(lines_out) if rebalance else lines_out
 
 
 def _rebalance(lines: list[str]) -> list[str]:
@@ -189,7 +189,7 @@ def split_text(text: str, count: int, max_width: int, max_lines: int) -> list[st
                 prev = dp[k - 1][j]
                 if prev is None:
                     continue
-                lines = best_layout(tokens[j:i], max_width, max_lines)
+                lines = best_layout(tokens[j:i], max_width, max_lines, rebalance=False)
                 if lines is None:
                     continue
                 width = max((display_width(line) for line in lines), default=0)
@@ -210,8 +210,28 @@ def split_text(text: str, count: int, max_width: int, max_lines: int) -> list[st
     boundaries.reverse()
     chunks: list[str] = []
     for left, right in zip(boundaries, boundaries[1:]):
-        lines = best_layout(tokens[left:right], max_width, max_lines)
+        lines = best_layout(tokens[left:right], max_width, max_lines, rebalance=False)
         if lines is None:
             return None
         chunks.append(flatten_lines(lines))
-    return chunks
+    return _rebalance_chunks(chunks)
+
+
+def _rebalance_chunks(chunks: list[str]) -> list[str]:
+    closing = {"i": "</i>", "b": "</b>", "u": "</u>"}
+    carry: list[str] = []
+    out: list[str] = []
+    for chunk in chunks:
+        prefix = "".join(f"<{tag}>" for tag in carry)
+        stack = list(carry)
+        for match in re.finditer(r"<\s*(/?)\s*([ibu])\b[^>]*>", chunk, re.IGNORECASE):
+            closing_tag, name = match.group(1), match.group(2).lower()
+            if closing_tag:
+                if stack and stack[-1] == name:
+                    stack.pop()
+            else:
+                stack.append(name)
+        suffix = "".join(closing[tag] for tag in reversed(stack))
+        out.append(prefix + chunk + suffix)
+        carry = stack
+    return out

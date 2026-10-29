@@ -22,9 +22,9 @@ def max_file_bytes(environ: dict[str, str] | None = None) -> int:
     try:
         value = int(raw)
     except ValueError:
-        raise CueLintError("config_invalid", f"CUELINT_MAX_FILE_BYTES 必须是整数，收到 {raw!r}。") from None
-    if not 1 <= value <= 100 * 1024 * 1024:
-        raise CueLintError("config_invalid", "CUELINT_MAX_FILE_BYTES 必须在 1 到 104857600 之间。")
+        raise CueLintError("config_invalid", "CUELINT_MAX_FILE_BYTES 必须是 1024 到 104857600 之间的整数。") from None
+    if not 1024 <= value <= 100 * 1024 * 1024:
+        raise CueLintError("config_invalid", "CUELINT_MAX_FILE_BYTES 必须是 1024 到 104857600 之间的整数。")
     return value
 
 

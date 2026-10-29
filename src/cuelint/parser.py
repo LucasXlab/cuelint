@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .errors import CueLintError
 from .model import Cue, Document
+from .profiles import visible_chars
 
 TIMESTAMP_RE = re.compile(r"^(\d{1,3}:\d{2}:\d{2}[,.]\d{3}|\d{1,2}:\d{2}[,.]\d{3})$")
 MAX_MS = 3_599_999_999
@@ -222,7 +223,7 @@ def _parse_timing(raw: str, *, file: str, line_number: int | None = None) -> tup
 def _check_limits(cues: list[Cue], *, source: str) -> None:
     if len(cues) > 10000:
         raise _err(f"字幕 cue 有 {len(cues)} 条，超过上限 10000 条。", file=source, code="input_too_large")
-    total = sum(len(c.text) for c in cues)
+    total = sum(visible_chars(c.text) for c in cues)
     if total > 2_000_000:
         raise _err(f"字幕文本共 {total} 个字符，超过上限 2000000 个。", file=source, code="input_too_large")
 

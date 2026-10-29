@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -114,7 +115,11 @@ def _profile_from_args(args: argparse.Namespace):
         raise
 
 
-def _text_check(report: Report, profile: str) -> None:
+def _paint(text: str, color: int, enabled: bool) -> str:
+    return f"\033[{color}m{text}\033[0m" if enabled else text
+
+
+def _text_check(report: Report, profile: str, color: bool = False) -> None:
     any_issue = False
     blocks: list[str] = []
     for file in report.files:
@@ -123,6 +128,7 @@ def _text_check(report: Report, profile: str) -> None:
         for issue in file.issues:
             any_issue = True
             label = "[错误]" if issue.severity == "error" else "警告"
+            label = _paint(label, 31 if issue.severity == "error" else 33, color)
             cue = "—" if issue.cue_index is None else f"#{issue.cue_index}"
             lines.append(f"  {label} {issue.rule}  {cue}  {issue.timecode}  {issue.message}")
             if issue.excerpt:
@@ -135,7 +141,7 @@ def _text_check(report: Report, profile: str) -> None:
         print("未发现问题。")
 
 
-def _text_fix(report: Report, profile: str, report_path: Path | None) -> None:
+def _text_fix(report: Report, profile: str, report_path: Path | None, color: bool = False) -> None:
     blocks: list[str] = []
     for file in report.files:
         lines = [f"{Path(file.input).name}  {file.format}  {file.cues} 条字幕  profile={profile}"]
@@ -168,12 +174,18 @@ def _run_files(args: argparse.Namespace, mode: str) -> int:
     )
     bundle = run(args.inputs, opts)
     json_mode = args.format == "json"
+    use_color = False
+    if not json_mode:
+        mode_color = color_mode()
+        use_color = mode_color == "always" or (
+            mode_color == "auto" and sys.stdout.isatty() and os.environ.get("TERM", "") != "dumb"
+        )
     if json_mode:
         print(json.dumps(bundle.report.to_dict(), ensure_ascii=False, indent=2))
     elif mode == "check":
-        _text_check(bundle.report, args.profile)
+        _text_check(bundle.report, args.profile, use_color)
     else:
-        _text_fix(bundle.report, args.profile, bundle.report_path)
+        _text_fix(bundle.report, args.profile, bundle.report_path, use_color)
     return 1 if failed_threshold(bundle.report, args.fail_on) else 0
 
 

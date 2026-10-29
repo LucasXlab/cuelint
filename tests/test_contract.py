@@ -47,8 +47,8 @@ def test_parse_and_serialize_no_crash_on_utf8_text(tmp_path):
 
 
 def test_env_max_bytes(monkeypatch):
-    monkeypatch.setenv("CUELINT_MAX_FILE_BYTES", "123")
-    assert max_file_bytes() == 123
+    monkeypatch.setenv("CUELINT_MAX_FILE_BYTES", "1024")
+    assert max_file_bytes() == 1024
     monkeypatch.setenv("CUELINT_MAX_FILE_BYTES", "no")
     with pytest.raises(CueLintError) as exc:
         max_file_bytes()
@@ -81,3 +81,45 @@ def test_output_does_not_overwrite_input(tmp_path):
     bundle = run([str(p)], RunOptions(mode="fix", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024))
     assert Path(bundle.results[0].output) != p
     assert p.read_text().startswith("1\n")
+
+
+def test_symlink_input_resolves_to_same_file(tmp_path):
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\nHi\n")
+    link = tmp_path / "link.srt"
+    link.symlink_to(p)
+    bundle = run([str(link)], RunOptions(mode="check", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024))
+    assert bundle.results[0].input == str(p.resolve())
+
+
+def test_nul_byte_is_control_char(tmp_path):
+    p = tmp_path / "a.srt"
+    p.write_bytes(b"1\n00:00:01,000 --> 00:00:02,000\nhi\x00there\n")
+    bundle = run([str(p)], RunOptions(mode="check", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024))
+    assert any(i.rule == "control-char" for i in bundle.results[0].issues)
+
+
+def test_report_has_no_external_urls(tmp_path):
+    from cuelint.report import render_report
+
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\nHi\n")
+    bundle = run([str(p)], RunOptions(mode="check", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024))
+    html = render_report(bundle.report)
+    assert "http://" not in html and "https://" not in html
+    assert "<script" not in html
+
+
+def test_large_file_performance(tmp_path):
+    import time
+
+    blocks = []
+    for i in range(2000):
+        blocks.append(f"{i+1}\n00:{i//60:02d}:{i%60:02d},000 --> 00:{i//60:02d}:{i%60:02d},900\nHello world")
+    p = tmp_path / "large.srt"
+    p.write_text("\n\n".join(blocks) + "\n")
+    start = time.perf_counter()
+    bundle = run([str(p)], RunOptions(mode="check", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024))
+    elapsed = time.perf_counter() - start
+    assert bundle.report.files[0].cues == 2000
+    assert elapsed < 5.0

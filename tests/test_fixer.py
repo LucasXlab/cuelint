@@ -89,3 +89,36 @@ def test_second_pass_no_fix_even_with_remaining_issues():
     again, fixes = fix(text)
     assert fixes == []
     assert serialize(again) == text
+
+
+def test_unfixable_short_and_gap():
+    # 500ms cue followed immediately by another; neither trim nor shift can keep 1000ms.
+    out, fixes = fix("1\n00:00:00,000 --> 00:00:00,500\nHi\n\n2\n00:00:00,550 --> 00:00:02,000\nThere\n")
+    assert any(i.rule in {"duration-too-short", "gap-too-small"} for i in check_document(out, CJK))
+
+
+def test_unfixable_long_unbreakable_token():
+    out, _ = fix("1\n00:00:00,000 --> 00:00:20,000\n" + "x" * 100 + "\n", BUILTINS["latin"])
+    assert len(out.cues) == 1
+    assert "duration-too-long" in [i.rule for i in check_document(out, BUILTINS["latin"])]
+
+
+def test_unfixable_cps_no_room():
+    out, _ = fix("1\n00:00:00,000 --> 00:00:01,000\n一二三四五六七八九十\n\n2\n00:00:01,080 --> 00:00:02,000\n好\n")
+    assert "cps-too-high" in [i.rule for i in check_document(out, CJK)]
+
+
+def test_inline_markup_reopened_across_lines():
+    text = "<i>" + "一二三四五六七八九十" * 3 + "</i>"
+    out, _ = fix(f"1\n00:00:00,000 --> 00:00:12,000\n{text}\n")
+    for cue in out.cues:
+        assert cue.text.count("<i>") == cue.text.count("</i>")
+        assert cue.text.startswith("<i>") and cue.text.endswith("</i>")
+
+
+def test_split_at_most_eight_segments():
+    # 100 seconds needs at most 8 pieces under the 8000ms cap, so the splitter
+    # must not create more than 8 cues from one source cue.
+    text = "一二三四五六七八九十" * 10
+    out, _ = fix(f"1\n00:00:00,000 --> 00:01:40,000\n{text}\n")
+    assert len(out.cues) <= 8
