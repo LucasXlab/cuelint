@@ -75,11 +75,11 @@ cuelint/
 | 变量 | 默认 | 必填 | 取值 | 非法时 |
 |---|---|---|---|---|
 | `CUELINT_COLOR` | `auto` | 否 | `auto` / `always` / `never` | 打印 `错误：CUELINT_COLOR 只能是 auto、always 或 never。`，退出 2 |
-| `CUELINT_NOW` | 空 | 否 | ISO 8601 UTC，例如 `2026-10-29T12:00:00Z` | 打印 `错误：CUELINT_NOW 不是合法的 ISO 8601 时间。`，退出 2 |
+| `CUELINT_NOW` | 空 | 否 | 带时区的 ISO 8601，例如 `2026-10-29T12:00:00Z` 或 `2026-10-29T20:00:00+08:00` | 打印 `错误：CUELINT_NOW 不是合法的 ISO 8601 时间。`，退出 2 |
 | `CUELINT_MAX_FILE_BYTES` | `20971520` | 否 | 1024–104857600 的整数 | 打印 `错误：CUELINT_MAX_FILE_BYTES 必须是 1024 到 104857600 之间的整数。`，退出 2 |
 
 - `CUELINT_COLOR=auto` 时，仅当标准输出是终端且 `TERM` 不为 `dumb` 时使用 ANSI 颜色。
-- `CUELINT_NOW` 只影响报告里的生成时间和 JSON 的 `generatedAt`；不改变任何计算。测试和截图用它固定输出。
+- `CUELINT_NOW` 只影响报告里的生成时间和 JSON 的 `generatedAt`；不改变任何计算。测试和截图用它固定输出。解析时接受带 `Z` 或 `±HH:MM` 的 ISO 8601，必须包含时区；转换成 UTC 后精确到秒，舍去微秒。无时区、只有日期、非法月份日期都退出 2。
 - 没有密钥、令牌、Cookie。任何日志都不打印字幕全文；文本输出只打印前 80 个字符的摘录。
 
 ### 3.2 配置文件
@@ -165,7 +165,8 @@ min_gap_ms = 80
 | `cues` | 整数 | 修复后的 cue 数 |
 | `before` | Counts | `{error, warning, total}` |
 | `after` | Counts | `{error, warning, total}` |
-| `issues` | Issue[] | 修复后的剩余问题；`check` 时为全部问题 |
+| `initialIssues` | Issue[] | 修复前检查到的全部问题；`check` 时与 `issues` 相同 |
+| `issues` | Issue[] | 修复后的剩余问题；`check` 时等于 `initialIssues` |
 | `fixes` | Fix[] | `fix` 时应用的修复；`check` 时为 `[]` |
 
 ### 4.6 Report（JSON）
@@ -193,6 +194,7 @@ min_gap_ms = 80
       "cues": 42,
       "before": {"error": 3, "warning": 2, "total": 5},
       "after": {"error": 0, "warning": 1, "total": 1},
+      "initialIssues": [],
       "issues": [],
       "fixes": []
     }
@@ -200,7 +202,7 @@ min_gap_ms = 80
 }
 ```
 
-- 数组顺序等于命令行输入顺序。同一个输入文件出现两次时，第二次视为重复参数，退出 2。
+- 数组顺序等于命令行输入顺序。同一个输入文件在命令行出现两次（按 `resolve()` 后的路径判断）时，第二次视为重复参数，所有子命令都退出 2，`code` 为 `usage_error`。
 - `generatedAt` 为 UTC ISO 8601，精确到秒，末尾 `Z`。设置了 `CUELINT_NOW` 时使用该值。
 - 数字不补零，布尔是 JSON 布尔。
 
@@ -228,11 +230,11 @@ cuelint check INPUT... [--profile NAME] [--config PATH] [--format text|json]
 ```
 
 - 至少 1 个 `INPUT`。
-- 只读，不写字幕文件；给了 `--report` 时写一份 HTML 报告。
+- 不写字幕文件；给了 `--report` 时写一份 HTML 报告。报告是唯一会写的文件。
 - 默认 `--fail-on error`：存在任意 `error` 时退出 1；只有 warning 时退出 0。
 - `--fail-on warning`：存在任意 error 或 warning 时退出 1。
 - `--fail-on never`：只要解析成功就退出 0。
-- 解析或配置错误：退出 2，不写报告。
+- 解析或配置错误：退出 2，不写报告。报告路径的父目录必须已存在且是目录，否则退出 2，`code` 为 `output_unwritable`。
 
 文本输出格式，每个文件一块：
 
@@ -250,7 +252,7 @@ episode-07.srt  srt  42 条字幕  profile=cjk
 - 没有问题时打印 `未发现问题。`。
 - 多个文件之间空一行。
 
-JSON 输出：4.6 的对象，其中 `output` 全为 null，`fixes` 全为 `[]`，`issues` 包含全部问题。
+JSON 输出：4.6 的对象，其中 `output` 全为 null，`fixes` 全为 `[]`，`before` 与 `after` 的计数相同，`initialIssues` 与 `issues` 是同一组问题的两份数组。
 
 ### 5.3 `fix`
 
@@ -270,8 +272,10 @@ cuelint fix INPUT... [--profile NAME] [--config PATH] [--out-dir DIR] [--suffix 
 - 两个输入产生同一个输出路径：退出 2，错误码 `output_collision`，不写任何文件。
 - 先解析并修复全部输入，全部成功后才写文件；任一文件解析失败则一个输出都不写、报告也不写。
 - 原子写：同一目录写临时文件 `.cuelint-<pid>-<n>.tmp`，`os.replace` 到目标；失败清理临时文件。
-- 报告在字幕文件全部写完后生成；报告写入失败时字幕文件保留，退出 3。
+- 报告在字幕文件全部写完后生成；报告写入失败时字幕文件保留，退出 3，`code` 为 `output_unwritable`。
+- 报告覆盖规则：`--report` 指向已存在的文件时直接覆盖；使用同一目录的临时文件加 `os.replace`；不提供 `--force`。报告路径解析后与任一输入或输出相同则退出 2，`code` 为 `output_collision`。
 - 退出码：修复后按 `--fail-on` 判断，规则同 5.2；全部修好且没有达到阈值的剩余问题为 0。
+- 如果任一输出仍含 `invalid-duration`（`end_ms <= start_ms`），本次不写任何字幕文件，退出 1，`code` 为 `unfixable_timing`，错误信息列出文件和 cue 序号。报告也不写。
 - 文本输出：
 
 ```
@@ -319,7 +323,7 @@ cuelint explain RULE_ID
 ### 5.7 错误输出
 
 - 文本模式：一行到标准错误，以 `错误：` 开头；有文件时加 `文件：<路径>` 和 `行：<n>`。退出码见下表。
-- JSON 模式：标准输出 `{"error":"<中文>","code":"<code>"}`，标准错误为空。多个文件时 `file` 和 `line` 作为额外字段出现。
+- JSON 模式：标准输出 `{"error":"<中文>","code":"<code>"}`，标准错误为空。错误与具体文件有关时，对象额外带 `"file"`（绝对路径）和 `"line"`（整数），字段名不是 `filePath` 或 `lineNumber`。
 - 不打印 Python traceback；`CUELINT_DEBUG=1` 也不打印（没有这个变量）。
 
 | 退出码 | 含义 | code 示例 |
@@ -334,21 +338,21 @@ cuelint explain RULE_ID
 
 规则按下列顺序检查和输出。同一 cue 可以有多个规则。严重级别不可由配置修改。
 
-| # | 规则 | 级别 | 条件 | 修复动作 | 修不了时 |
-|---|---|---|---|---|---|
-| 1 | `empty-cue` | error | 去掉标记和首尾空白后，文本为空 | 删除该 cue | — |
-| 2 | `duplicate-cue` | warning | 两条 cue 的 `start_ms`、`end_ms`、规范化文本完全相同 | 保留第一条，删除后面的 | — |
-| 3 | `invalid-duration` | error | `end_ms <= start_ms` | 无 | 保留原样，报告为需人工 |
-| 4 | `overlap` | error | 排序后，后一条 `start_ms` < 前一条 `end_ms` | 先尝试把前一条 `end_ms` 改为后一条 `start_ms - min_gap_ms`；若前一条时长 < `min_duration_ms`，尝试把后一条 `start_ms` 改为前一条 `end_ms + min_gap_ms`；仍不满足则放弃 | 保留原样 |
-| 5 | `duration-too-short` | warning | `end_ms - start_ms < min_duration_ms` | 延长 `end_ms`，上限为下一条 `start_ms - min_gap_ms` 和 `start_ms + max_duration_ms` 的较小值 | 保留原样 |
-| 6 | `duration-too-long` | warning | `end_ms - start_ms > max_duration_ms` | 在合法断点拆成多段，段间留 `min_gap_ms`；最多 8 段 | 保留原样 |
-| 7 | `gap-too-small` | warning | 排序后，后一条 `start_ms - 前一条 end_ms` 在 0 到 `min_gap_ms` 之间（不含 0） | 缩短前一条 `end_ms` 到后一条 `start_ms - min_gap_ms` | 缩短后前一条 < `min_duration_ms` 则保留原样 |
-| 8 | `cps-too-high` | error | `visible_chars / (duration_ms/1000) > max_cps` | 先尝试延长 `end_ms`（同上限）；仍有空间则拆段 | 保留原样 |
-| 9 | `line-too-long` | warning | 任一行的 `display_width > max_line_width` | 重新断行；必要时拆段 | 单个不可断 token 超宽则保留 |
-| 10 | `too-many-lines` | warning | `text` 的行数 > `max_lines` | 重新断行；必要时拆段 | 保留原样 |
-| 11 | `control-char` | error | 文本含 U+0000–U+0008、U+000B、U+000C、U+000E–U+001F、U+007F | 替换为一个半角空格，再压缩连续空格 | — |
-| 12 | `unbalanced-markup` | warning | `<i>`、`<b>`、`<u>` 开闭数量不配对，或嵌套顺序错误 | 无 | 保留原样 |
-| 13 | `complex-markup` | warning | 含 `<i>/<b>/<u>` 之外的 `<...>` 或 `{\...}` 标记 | 不修改该 cue 的排版和拆段，只检查文本宽度 | 保留原样 |
+| # | 规则 | 级别 | 可修复 | 条件 | 修复动作 | 修不了时 |
+|---|---|---|---|---|---|---|
+| 1 | `empty-cue` | error | 是 | 去掉标记和首尾空白后，文本为空 | 删除该 cue | — |
+| 2 | `duplicate-cue` | warning | 是 | 两条 cue 的 `start_ms`、`end_ms`、规范化文本完全相同 | 保留第一条，删除后面的 | — |
+| 3 | `invalid-duration` | error | 否 | `end_ms <= start_ms` | 无 | 保留原样，报告为需人工；`fix` 不写出该文件 |
+| 4 | `overlap` | error | 是 | 排序后，后一条 `start_ms` < 前一条 `end_ms` | 先尝试把前一条 `end_ms` 改为后一条 `start_ms - min_gap_ms`；改后必须满足 `end_ms - start_ms >= min_duration_ms`。不满足时尝试把后一条 `start_ms` 改为前一条 `end_ms + min_gap_ms`；改后必须满足 `end_ms > start_ms` 且不超过 `start_ms + max_duration_ms`。两次都不满足则放弃 | 保留原样 |
+| 5 | `duration-too-short` | warning | 是 | `end_ms - start_ms < min_duration_ms` | 延长 `end_ms`，上限为 `next.start_ms - min_gap_ms`（没有下一条时用 `start_ms + max_duration_ms`）和 `start_ms + max_duration_ms` 的较小值；改后必须 `end_ms > start_ms` | 上限小于 `start_ms + min_duration_ms` 时保留原样 |
+| 6 | `duration-too-long` | warning | 是 | `end_ms - start_ms > max_duration_ms` | 在合法断点拆成多段，段间留 `min_gap_ms`；最多 8 段 | 找不到断点、段数超过 8、或任一段时长 < `min_duration_ms` 时保留原样 |
+| 7 | `gap-too-small` | warning | 是 | 排序后，`0 <= 后一条 start_ms - 前一条 end_ms < min_gap_ms` | 缩短前一条 `end_ms` 到后一条 `start_ms - min_gap_ms`；改后必须 `end_ms - start_ms >= min_duration_ms` | 不满足时保留原样 |
+| 8 | `cps-too-high` | error | 是 | `visible_chars / (duration_ms/1000) > max_cps` | 先算 `needed_end = start_ms + ceil(visible_chars / max_cps * 1000)`；若 `needed_end <= min(下一条 start_ms - min_gap_ms, start_ms + max_duration_ms)`，把 `end_ms` 延长到 `needed_end`。否则按规则 6 同样的方式拆段 | 延长和拆段都不满足时保留原样 |
+| 9 | `line-too-long` | warning | 是（`complex-markup` 为否） | 任一行的 `display_width > max_line_width` | 重新断行；必要时拆段 | 单个不可断 token 超宽、或命中 `complex-markup` 时保留 |
+| 10 | `too-many-lines` | warning | 是（`complex-markup` 为否） | `text` 的行数 > `max_lines` | 重新断行；必要时拆段 | 命中 `complex-markup` 或断不开时保留 |
+| 11 | `control-char` | error | 是 | 文本含 U+0000–U+0008、U+000B、U+000C、U+000E–U+001F、U+007F–U+009F | 替换为一个半角空格，再压缩连续空格 | — |
+| 12 | `unbalanced-markup` | warning | 否 | `<i>`、`<b>`、`<u>` 开闭数量不配对，或嵌套顺序错误 | 无 | 保留原样 |
+| 13 | `complex-markup` | warning | 否 | 含 `<i>/<b>/<u>` 之外的 `<...>` 或 `{\...}` 标记 | 不修改该 cue 的排版和拆段，只检查文本宽度 | 保留原样 |
 
 补充定义：
 
@@ -406,6 +410,13 @@ cuelint explain RULE_ID
 
 对一份已经通过 `fix` 输出、且没有剩余 `error` 的文件再次运行 `fix`，必须不产生任何 `Fix`，输出字幕逐字节相同（报告时间除外）。
 
+### 7.4 输出格式
+
+- SRT：每条 cue 依次写序号（从 1 开始）、换行、`HH:MM:SS,mmm --> HH:MM:SS,mmm`、`settings` 原样（前面加一个空格，若原来有）、换行、文本、空行。文件以 UTF-8 无 BOM 写入，换行固定为 `\n`，最后一条 cue 后保留一个空行。
+- VTT：先写 `WEBVTT`，再逐行写 `header_lines`，空行，然后每条 cue 写 `identifier`（若有，单独一行）、`HH:MM:SS.mmm --> HH:MM:SS.mmm`、`settings`（前面加一个空格，若原来有）、换行、文本、空行。最后保留一个空行。
+- 输出扩展名由解析出的 `format` 决定：`srt` 写 `.srt`，`vtt` 写 `.vtt`，与输入扩展名无关。
+- `fix` 的输出文件权限使用 `0o644`（受 umask 影响），不保留输入文件的权限位。
+
 ## 8. 内置 profile
 
 | 名称 | `max_line_width` | `max_lines` | `max_cps` | `min_duration_ms` | `max_duration_ms` | `min_gap_ms` |
@@ -429,11 +440,12 @@ cuelint explain RULE_ID
 - 内容顺序：
   1. 页头：`CueLint`、输入文件名、profile 名、`v0.1.0`、生成时间（UTC）。
   2. 摘要：修复前错误/警告、修复数、修复后错误/警告、需人工数。数字用等宽数字。
-  3. 问题表：级别（圆点 + 文字）、规则、cue 序号、时间码、说明、状态（`已修复` / `需人工` / `未处理`）。
+  3. 问题表：级别（圆点 + 文字）、规则、cue 序号、时间码、说明、状态。状态按 `initialIssues` 逐条判断：该问题仍出现在 `issues` 中且 `fixable=false` 时为 `需人工`；仍在 `issues` 中且 `fixable=true` 时为 `未处理`；不在 `issues` 中时为 `已修复`。同一 `(rule, cue_index, line, message)` 视为同一条问题。
   4. 变更预览：最多 50 条有修复的 cue；每条显示修复前时间/文本、修复后时间/文本；超过 50 条时显示“还有 N 条，见 JSON 输出”。
   5. 页脚：`本报告由 CueLint v0.1.0 在本地生成；没有上传字幕或统计数据。`
-- 修复前的问题和修复后的剩余问题都从 `FileResult` 取；报告只展示，不重新计算。
+- 修复前的问题从 `FileResult.initialIssues` 取，修复后的剩余问题从 `FileResult.issues` 取；报告只展示，不重新计算。
 - 报告文件超过 5MB 时仍然写，但终端提示 `报告较大：<字节数> 字节`。
+- 报告路径的父目录必须已存在且是目录，否则退出 2，`code` 为 `output_unwritable`。
 - 报告路径与任一输入或输出相同：退出 2，`output_collision`。
 
 ## 10. 风险与防护
