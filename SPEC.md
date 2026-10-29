@@ -141,7 +141,8 @@ min_gap_ms = 80
 |---|---|---|---|
 | `rule` | 字符串 | 见第 6 节 | 规则编号 |
 | `severity` | 枚举 | `"error"` / `"warning"` | |
-| `cue_index` | 整数或 null | 默认 null | 原始 cue 序号；文件级问题为 null |
+| `cue_index` | 整数或 null | 默认 null | 当前文档里的 cue 序号；`initialIssues` 用输入序号，`issues` 用输出序号；文件级问题为 null |
+| `originIndex` | 整数或 null | 默认 null | 该问题所属 cue 在输入文件里的原始序号；拆段后的每个输出 cue 都继承原序号 |
 | `line` | 整数或 null | 默认 null | 来源行号 |
 | `message` | 字符串 | 非空 | 中文，包含实际数值 |
 | `fixable` | 布尔 | 默认 false | 修复流水线是否能处理 |
@@ -165,7 +166,7 @@ min_gap_ms = 80
 | `endMs` | 整数 | 毫秒 |
 | `text` | 字符串 | 规范化后的文本，保留换行和标记 |
 
-`Fix.before` 与 `Fix.after` 是报告预览的唯一数据来源。`Fix.cue_index` 始终是输入文件里的序号；`issues` 数组里的 `cue_index` 是输出文件里的最终序号；`initialIssues` 数组里的 `cue_index` 是输入文件里的序号。
+`Fix.before` 与 `Fix.after` 是报告预览的唯一数据来源。`Fix.cue_index` 始终是输入文件里的序号；`issues` 数组里的 `cue_index` 是输出文件里的最终序号，`originIndex` 是输入序号；`initialIssues` 数组里的 `cue_index` 和 `originIndex` 都等于输入序号。拆段产生的输出 cue 继承原 cue 的 `originIndex`。
 
 ### 4.5 FileResult
 
@@ -484,7 +485,7 @@ cuelint explain RULE_ID
   1. 页头：`CueLint`、`N 个文件`、profile 名、`v0.1.0`、生成时间（UTC）。
   2. 全局摘要：所有文件的修复前错误/警告、修复数、修复后错误/警告、需人工数之和。数字用等宽数字。
   3. 每个文件一节，按命令行顺序：文件名（绝对路径的 basename）、该文件的修复前后计数、问题表、变更预览。文件之间用 2px 分隔线。
-  4. 问题表：级别（圆点 + 文字）、规则、cue 序号、时间码、说明、状态。状态按 `initialIssues` 逐条判断：该问题仍出现在 `issues` 中且 `fixable=false` 时为 `需人工`；仍在 `issues` 中且 `fixable=true` 时为 `未处理`；不在 `issues` 中时为 `已修复`。同一 `(rule, cue_index, line, message)` 视为同一条问题。问题超过 20 条时，前 20 条直接显示，其余放进该文件节里的 `<details>`；折叠区不设条数上限。
+  4. 问题表：级别（圆点 + 文字）、规则、cue 序号、时间码、说明、状态。状态按 `initialIssues` 逐条判断：该问题仍出现在 `issues` 中且 `fixable=false` 时为 `需人工`；仍在 `issues` 中且 `fixable=true` 时为 `未处理`；不在 `issues` 中时为 `已修复`。同一 `(rule, originIndex)` 视为同一条问题：`initialIssues` 中该键在 `issues` 里再次出现时，按 `issues` 的 `fixable` 标 `需人工` 或 `未处理`；不再出现时标 `已修复`。问题超过 20 条时，前 20 条直接显示，其余放进该文件节里的 `<details>`；折叠区不设条数上限。
   5. 变更预览：每个文件最多 50 条有修复的 cue；每条显示修复前时间/文本、修复后时间/文本；超过 50 条时在该文件节末尾显示“本文件还有 N 条变更未在预览中，完整问题见上方表格。”
   6. 页脚：`本报告由 CueLint v0.1.0 在本地生成；没有上传字幕或统计数据。`
 - 修复前的问题从 `FileResult.initialIssues` 取，修复后的剩余问题从 `FileResult.issues` 取；报告只展示，不重新计算。
