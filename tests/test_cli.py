@@ -251,3 +251,13 @@ def test_all_empty_cues_abort_without_output(run, tmp_path):
     data = json.loads(out)
     assert data["code"] == "all_cues_removed"
     assert not (tmp_path / "a.fixed.srt").exists()
+
+
+
+def test_config_huge_integer_is_config_invalid(run, tmp_path):
+    p = make(tmp_path)
+    cfg = tmp_path / "c.toml"
+    cfg.write_text("[profile]\nmax_lines = 1" + "0" * 400 + "\n")
+    code, out, _ = run(["check", str(p), "--config", str(cfg), "--format", "json"])
+    assert code == 2
+    assert json.loads(out)["code"] == "config_invalid"

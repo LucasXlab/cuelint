@@ -215,9 +215,11 @@ def _parse_timing(raw: str, *, file: str, line_number: int | None = None) -> tup
     if not match:
         raise _err(f"结束时间格式不正确：{right!r}。", file=file, line=line_number)
     token = match.group(0)
+    residue = right[len(token) :].strip()
+    if "-->" in residue:
+        raise _err("时间行包含多个 -->，无法判定结束时间。", file=file, line=line_number)
     end_ms = parse_timestamp(token, file=file, line=line_number or 0)
-    settings = right[len(token) :].strip()
-    return start_ms, end_ms, settings
+    return start_ms, end_ms, residue
 
 
 def _check_limits(cues: list[Cue], *, source: str) -> None:

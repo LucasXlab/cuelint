@@ -224,7 +224,8 @@ def _explain(rule_id: str, fmt: str) -> int:
     else:
         print(f"规则：{rule.id}")
         print(f"级别：{rule.severity}")
-        print(f"可修复：{rule.fixability}")
+        labels = {"auto": "可修复", "conditional": "条件可修复", "manual": "需人工"}
+        print(f"可修复：{labels[rule.fixability]}")
         print(f"条件：{rule.condition}")
         print(f"修复：{rule.fix}")
         print(f"修不了：{rule.unfixable}")

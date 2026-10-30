@@ -30,7 +30,7 @@ RULES: list[Rule] = [
     Rule("duration-too-short", "warning", "conditional", "字幕停留时间低于下限。", "end_ms - start_ms < min_duration_ms。", "延长结束时间，不压到下一条。", "下一条之前没有足够空间时保留原样。"),
     Rule("duration-too-long", "warning", "conditional", "字幕停留时间超过上限。", "end_ms - start_ms > max_duration_ms。", "在合法断点拆成多段，段间留 min_gap_ms。", "找不到断点、超过 8 段或任一段过短时保留原样。"),
     Rule("gap-too-small", "warning", "conditional", "相邻字幕之间的间隔低于下限。", "0 <= 下一条 start_ms - 前一条 end_ms < min_gap_ms。", "缩短前一条的结束时间。", "缩短后低于最小时长时保留原样。"),
-    Rule("cps-too-high", "error", "conditional", "毎秒可见字符数超过上限。", "visible_chars / (duration_ms/1000) > max_cps。", "延长结束时间；仍超速则在合法断点拆段。", "延长和拆段都不满足时保留原样。"),
+    Rule("cps-too-high", "error", "conditional", "每秒可见字符数超过上限。", "visible_chars / (duration_ms/1000) > max_cps。", "延长结束时间；仍超速则在合法断点拆段。", "延长和拆段都不满足时保留原样。"),
     Rule("line-too-long", "warning", "conditional", "某一行的显示宽度超过上限。", "任一行的 display_width > max_line_width。", "重新断行；必要时拆段。", "单个不可断 token 超宽或命中 complex-markup 时保留。"),
     Rule("too-many-lines", "warning", "conditional", "字幕行数超过上限。", "text 的行数 > max_lines。", "重新断行；必要时拆段。", "命中 complex-markup 或断不开时保留。"),
     Rule("control-char", "error", "auto", "字幕含控制字符。", "含 U+0000–U+0008、U+000B、U+000C、U+000E–U+001F、U+007F–U+009F。", "替换为一个半角空格，再压缩连续空格。", "无。"),

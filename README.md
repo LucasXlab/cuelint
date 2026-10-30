@@ -16,13 +16,13 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
   <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-0f766e">
-  <img alt="Tests 89 passed" src="https://img.shields.io/badge/tests-89%20passed-2f855a">
+  <img alt="Tests 94 passed" src="https://img.shields.io/badge/tests-94%20passed-2f855a">
   <img alt="No network" src="https://img.shields.io/badge/network-none-4a5568">
 </p>
 
 ![CueLint 报告：浅色模式](assets/report-light.png)
 
-CueLint 是一个本地命令行工具，检查 SRT / WebVTT 字幕并修掉能确定修好的问题：重叠、过短或过长的停留、过小的间隔、超宽行、过多行、语速过快、空字幕、重复字幕、控制字符和简单标记错误。报告是一个可直接打开的 HTML 文件，不联网、不上传、不需要账号，也不读取音视频。
+CueLint 是一个本地命令行工具，检查 SRT / WebVTT 字幕并修掉能确定修好的问题：重叠、过短或过长的停留、过小的间隔、超宽行、过多行、语速过快、空字幕、重复字幕、控制字符和简单标记错误（标记问题只报告，不自动改写）。报告是一个可直接打开的 HTML 文件，不联网、不上传、不需要账号，也不读取音视频。
 
 它面向每周发 1–3 条口播视频、字幕来自自动识别或翻译的独立创作者和小团队。默认 `cjk` 档针对中文口播：36 列、2 行、9 字/秒。
 
@@ -40,21 +40,21 @@ CueLint 把这些问题变成可复现的检查项，并在不改变说话内容
 
 ## 快速开始
 
-需要 Python 3.11+。
+需要 Python 3.11+。最稳妥的方式是用虚拟环境，`cuelint` 会自动进入 PATH：
 
 ```bash
-# 推荐：隔离安装
-pipx install .
-
-# 或者只装到当前用户
-pip install --user .
+python3 -m venv .venv
+. .venv/bin/activate
+pip install .
 
 cuelint --version
 cuelint check examples/demo.zh.srt
-cuelint fix examples/demo.zh.srt --report demo-report.html
+cuelint fix examples/demo.zh.srt --report demo-report.html --force
 ```
 
-`fix` 默认生成 `examples/demo.zh.fixed.srt`，不覆盖原文件。打开 `demo-report.html` 可以看到修复前后的计数、每条问题的位置、原文摘录和修复预览。
+也可以把最后两行换成 `pipx install .`（需要先装 pipx：`brew install pipx && pipx ensurepath`，重开终端），或 `pip install --user .`（把 `~/Library/Python/3.x/bin` 或 `~/.local/bin` 加入 PATH）。
+
+`fix` 默认生成 `examples/demo.zh.fixed.srt`，不覆盖原文件。打开 `demo-report.html` 可以看到修复前后的计数、每条问题的位置、原文摘录和修复预览。示例故意包含问题：`check` 和 `fix` 退出 1 是预期结果，不是安装失败。
 
 ## 常用命令
 
@@ -140,25 +140,27 @@ cuelint profiles
 ## 升级
 
 ```bash
-pipx upgrade cuelint
+pipx install --force .          # pipx 本地路径安装
 # 或
-pip install --user --upgrade .
+pip install --upgrade .         # 当前虚拟环境
+# 或
+pip install --user --upgrade .  # 当前用户
 ```
 
 0.x 阶段不保证跨小版本兼容；升级前看 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
+下载或克隆本仓库，进入目录后：
+
 ```bash
-git clone <this-repo> cuelint
-cd cuelint
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e '.[test]'
 python -m pytest
 ```
 
-测试不联网，全部在临时目录运行；连续三遍通过。当前 89 个用例，最近一次三遍均为 `89 passed`。
+测试不联网，全部在临时目录运行；连续三遍通过。当前 94 个用例，最近一次三遍均为 `94 passed`。
 
 ## 发布前还需要你做什么
 

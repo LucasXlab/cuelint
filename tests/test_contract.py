@@ -123,3 +123,47 @@ def test_large_file_performance(tmp_path):
     elapsed = time.perf_counter() - start
     assert bundle.report.files[0].cues == 2000
     assert elapsed < 5.0
+
+
+def test_report_case_variant_input_collision(tmp_path):
+    upper = tmp_path / "A.srt"
+    upper.write_text("1\n00:00:01,000 --> 00:00:02,000\nHi\n")
+    lower = tmp_path / "a.srt"
+    if not lower.exists():
+        pytest.skip("case-insensitive filesystem required")
+    with pytest.raises(CueLintError) as exc:
+        run([str(upper)], RunOptions(mode="check", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024, report_path=lower))
+    assert exc.value.code == "output_collision"
+
+
+def test_umask_respected(tmp_path):
+    import os
+
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\nHi\n")
+    old = os.umask(0o077)
+    try:
+        bundle = run([str(p)], RunOptions(mode="fix", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024))
+    finally:
+        os.umask(old)
+    assert oct(Path(bundle.results[0].output).stat().st_mode & 0o777) == "0o600"
+
+
+def test_output_directory_with_force_aborts_batch(tmp_path):
+    a = tmp_path / "a.srt"
+    b = tmp_path / "b.srt"
+    a.write_text("1\n00:00:01,000 --> 00:00:02,000\nHi\n")
+    b.write_text("1\n00:00:01,000 --> 00:00:02,000\nHi\n")
+    (tmp_path / "b.fixed.srt").mkdir()
+    with pytest.raises(CueLintError) as exc:
+        run([str(a), str(b)], RunOptions(mode="fix", profile=BUILTINS["cjk"], profile_name="cjk", max_bytes=20 * 1024 * 1024, force=True))
+    assert exc.value.code == "output_unwritable"
+    assert not (tmp_path / "a.fixed.srt").exists()
+
+
+def test_double_arrow_rejected(tmp_path):
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000 --> 00:00:03,000\nHi\n")
+    with pytest.raises(CueLintError) as exc:
+        parse_bytes(p.read_bytes())
+    assert exc.value.code == "parse_error"

@@ -82,6 +82,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 32px 24px 48px; }
 .metric:first-child { border-left: 0; }
 .metric .num { font-size: var(--font-metric-size); line-height: var(--font-metric-line); font-weight: 600; font-variant-numeric: tabular-nums; }
 .metric .label { color: var(--text-muted); font-size: var(--font-caption-size); line-height: var(--font-caption-line); }
+.summary-note { color: var(--text-muted); font-size: var(--font-caption-size); margin: 0 0 var(--space-4); }
 .file { padding-top: 24px; }
 .file + .file { margin-top: 28px; border-top: 2px solid var(--border-strong); }
 .file-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
@@ -244,11 +245,15 @@ def render_report(report: Report) -> str:
         (report.fix_count, "修复处数"),
         (after.error, "修复后错误"),
         (after.warning, "修复后警告"),
-        (manual, "需人工"),
+        (manual, "需人工（不可修）"),
     ]
     metrics = "".join(
         f'<div class="metric"><div class="num">{value}</div><div class="label">{label}</div></div>'
         for value, label in summary
+    )
+    summary_note = (
+        '<p class="summary-note">“需人工”只统计规则本身不能自动修的问题；'
+        '可自动修但本次未处理的，见下表“未处理”和修复后错误/警告。</p>'
     )
     sections: list[str] = []
     for file in report.files:
@@ -284,6 +289,7 @@ def render_report(report: Report) -> str:
         f'<div class="meta">{len(report.files)} 个文件　profile={escape(report.profile)}　'
         f"v{escape(report.version)}　{escape(report.generated_at)}</div></header>"
         f'<section class="summary">{metrics}</section>'
+        f'{summary_note}'
         + "".join(sections)
         + '<footer>本报告由 CueLint v'
         + escape(report.version)

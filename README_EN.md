@@ -16,13 +16,13 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
   <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-0f766e">
-  <img alt="Tests 89 passed" src="https://img.shields.io/badge/tests-89%20passed-2f855a">
+  <img alt="Tests 94 passed" src="https://img.shields.io/badge/tests-94%20passed-2f855a">
   <img alt="No network" src="https://img.shields.io/badge/network-none-4a5568">
 </p>
 
 ![CueLint report, light mode](assets/report-light.png)
 
-CueLint is a local command-line tool that checks SRT and WebVTT subtitles and fixes problems it can resolve deterministically: overlaps, cues that are too short or too long, gaps that are too small, lines that are too wide, too many lines, excessive reading speed, empty or duplicate cues, control characters, and simple markup errors. The report is a single self-contained HTML file. It does not use the network, upload anything, require an account, or read audio or video.
+CueLint is a local command-line tool that checks SRT and WebVTT subtitles and fixes problems it can resolve deterministically: overlaps, cues that are too short or too long, gaps that are too small, lines that are too wide, too many lines, excessive reading speed, empty or duplicate cues, control characters, and simple markup errors (markup issues are reported, not rewritten). The report is a single self-contained HTML file. It does not use the network, upload anything, require an account, or read audio or video.
 
 It is built for independent creators and small teams publishing one to three talking-head videos a week, with captions produced by automatic speech recognition or translation. The default `cjk` profile targets Chinese speech: 36 columns, 2 lines, 9 characters per second.
 
@@ -40,21 +40,23 @@ CueLint turns those into reproducible checks and repairs them without changing w
 
 ## Quick start
 
-Python 3.11+ is required.
+Note: in 0.1.0 the CLI output, reports, and linked docs are in Chinese; the English README is a translation for orientation.
+
+Python 3.11+ is required. A virtual environment is the most reliable path because `cuelint` is placed on PATH automatically:
 
 ```bash
-# Isolated install (recommended)
-pipx install .
-
-# Or install for the current user
-pip install --user .
+python3 -m venv .venv
+. .venv/bin/activate
+pip install .
 
 cuelint --version
 cuelint check examples/demo.zh.srt
-cuelint fix examples/demo.zh.srt --report demo-report.html
+cuelint fix examples/demo.zh.srt --report demo-report.html --force
 ```
 
-`fix` writes `examples/demo.zh.fixed.srt`; it never overwrites the input. Open `demo-report.html` for before/after counts, issue locations, excerpts, and fix previews.
+You can use `pipx install .` instead (install pipx first: `brew install pipx && pipx ensurepath`, then reopen the shell), or `pip install --user .` (add `~/Library/Python/3.x/bin` or `~/.local/bin` to PATH).
+
+`fix` writes `examples/demo.zh.fixed.srt`; it never overwrites the input. Open `demo-report.html` for before/after counts, issue locations, excerpts, and fix previews. The demo intentionally contains issues: exit 1 from `check` and `fix` is expected, not an install failure.
 
 ## Common commands
 
@@ -111,6 +113,8 @@ The report is one self-contained HTML file: no external fonts, scripts, images, 
 
 ## Docs
 
+All linked documents are currently in Chinese.
+
 - [Features and rules](docs/features.md)
 - [Development and testing](docs/development.md)
 - [External dependencies and formats](docs/external-apis.md)
@@ -122,25 +126,27 @@ The report is one self-contained HTML file: no external fonts, scripts, images, 
 ## Upgrade
 
 ```bash
-pipx upgrade cuelint
+pipx install --force .          # local-path pipx install
 # or
-pip install --user --upgrade .
+pip install --upgrade .         # current virtualenv
+# or
+pip install --user --upgrade .  # current user
 ```
 
 0.x releases do not guarantee compatibility across minor versions; read [CHANGELOG.md](CHANGELOG.md) before upgrading.
 
 ## Development
 
+Download or clone this repository and enter its directory:
+
 ```bash
-git clone <this-repo> cuelint
-cd cuelint
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e '.[test]'
 python -m pytest
 ```
 
-Tests use no network and run entirely in temporary directories. The current suite has 89 tests and passed three consecutive runs.
+Tests use no network and run entirely in temporary directories. The current suite has 94 tests and passed three consecutive runs.
 
 ## License
 

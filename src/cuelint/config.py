@@ -60,7 +60,11 @@ def _check_override(key: str, value: object) -> None:
     else:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise CueLintError("config_invalid", f"{key} 必须是数字。")
-    if not low <= float(value) <= high:
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        raise CueLintError("config_invalid", f"{key} 必须是 {low} 到 {high} 之间的数字。") from None
+    if not low <= number <= high:
         raise CueLintError("config_invalid", f"{key} 必须在 {low} 到 {high} 之间。")
 
 

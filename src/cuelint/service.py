@@ -52,18 +52,29 @@ def _output_path(input_path: Path, fmt: str, opts: RunOptions) -> Path:
     return (opts.output_dir / name) if opts.output_dir else (input_path.parent / name)
 
 
+def _same_path(a: Path, b: Path) -> bool:
+    if a.resolve() == b.resolve():
+        return True
+    try:
+        return a.exists() and b.exists() and os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 def _preflight(outputs: list[Path], inputs: list[Path], force: bool) -> None:
     seen: set[Path] = set()
     for path in outputs:
         resolved = path.resolve()
-        if resolved in seen:
+        if any(_same_path(resolved, other) for other in seen):
             raise CueLintError("output_collision", f"两个输入产生同一个输出：{resolved}", file=str(resolved))
         seen.add(resolved)
-        if resolved in set(inputs):
+        if any(_same_path(resolved, input_path) for input_path in inputs):
             raise CueLintError("output_collision", f"输出路径与输入相同：{resolved}", file=str(resolved))
         parent = resolved.parent
         if not parent.exists() or not parent.is_dir():
             raise CueLintError("output_unwritable", f"输出目录不存在：{parent}", file=str(resolved), exit_code=3)
+        if resolved.is_dir():
+            raise CueLintError("output_unwritable", f"输出路径是目录：{resolved}", file=str(resolved), exit_code=3)
         if resolved.exists() and not force:
             raise CueLintError(
                 "output_exists",
@@ -79,7 +90,7 @@ def _prepare_report(path: Path | None, inputs: list[Path], outputs: list[Path]) 
     if path is None:
         return None
     resolved = path.expanduser().resolve()
-    if resolved in set(inputs) or resolved in set(outputs):
+    if any(_same_path(resolved, other) for other in inputs) or any(_same_path(resolved, other) for other in outputs):
         raise CueLintError("output_collision", f"报告路径与输入或输出相同：{resolved}", file=str(resolved))
     if not resolved.parent.exists() or not resolved.parent.is_dir():
         raise CueLintError("output_unwritable", f"报告目录不存在：{resolved.parent}", file=str(resolved))
@@ -98,7 +109,9 @@ def _atomic_write(path: Path, text: str) -> None:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(tmp_name, 0o644)
+        mask = os.umask(0)
+        os.umask(mask)
+        os.chmod(tmp_name, 0o644 & ~mask)
         os.replace(tmp_name, path)
         tmp_name = ""
     except OSError as exc:

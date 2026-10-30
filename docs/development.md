@@ -26,7 +26,7 @@ src/cuelint/
   service.py    多文件编排、预检、原子写
   report.py     HTML 报告
   config.py     TOML、环境变量、时间
-tests/          89 个 pytest 用例
+tests/          94 个 pytest 用例
 examples/       可直接运行的中文字幕样本
 ```
 
