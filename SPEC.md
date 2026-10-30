@@ -292,6 +292,7 @@ cuelint fix INPUT... [--profile NAME] [--config PATH] [--out-dir DIR] [--suffix 
 - 报告覆盖规则：`--report` 指向已存在的文件时直接覆盖；使用同一目录的临时文件加 `os.replace`；不提供 `--force`。报告路径解析后与任一输入或输出相同则退出 2，`code` 为 `output_collision`。
 - 退出码：修复后按 `--fail-on` 判断，规则同 5.2；全部修好且没有达到阈值的剩余问题为 0。
 - 如果任一输出仍含 `invalid-duration`（`end_ms <= start_ms`），本次不写任何字幕文件，退出 1，`code` 为 `unfixable_timing`，错误信息列出文件和 cue 序号。报告也不写。
+- 如果某个文件删除空字幕后剩下 0 条 cue，本次不写任何字幕文件，退出 1，`code` 为 `all_cues_removed`，错误信息指出文件。报告也不写。
 - 文本输出：
 
 ```
@@ -347,7 +348,7 @@ cuelint explain RULE_ID
 | 退出码 | 含义 | code 示例 |
 |---|---|---|
 | 0 | 成功，或未达到 `--fail-on` 阈值 | |
-| 1 | 达到 `--fail-on` 阈值，或 `fix` 仍有非法时长未写出 | `unfixable_timing` |
+| 1 | 达到 `--fail-on` 阈值，或 `fix` 仍有非法时长未写出，或删除空字幕后没有 cue | `unfixable_timing` / `all_cues_removed` |
 | 2 | 参数、配置、输入、解析错误 | `usage_error`、`config_invalid`、`input_not_found`、`input_not_file`、`input_too_large`、`encoding_unsupported`、`parse_error`、`output_collision`、`output_unwritable` |
 | 3 | 输出写入失败或已存在 | `output_exists`、`output_unwritable` |
 | 70 | 未预期内部错误 | `internal_error` |

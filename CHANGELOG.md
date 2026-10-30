@@ -12,5 +12,5 @@
 - 多文件批处理、原子写、输出预检、`--force` / `--out-dir` / `--suffix`。
 - `check` / `fix` / `profiles` / `rules` / `explain`，文本和 JSON 输出，退出码 0/1/2/3/70。
 - `CUELINT_COLOR`、`CUELINT_NOW`、`CUELINT_MAX_FILE_BYTES`。
-- 88 个 pytest 用例，离线、无固定 sleep；连续三遍通过。
+- 89 个 pytest 用例，离线、无固定 sleep；连续三遍通过。
 - MIT 许可证。

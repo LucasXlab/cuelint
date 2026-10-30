@@ -150,6 +150,13 @@ def run(paths: list[str], opts: RunOptions) -> Bundle:
             )
             continue
         fixed_doc, fixes = fix_document(doc, opts.profile)
+        if not fixed_doc.cues:
+            raise CueLintError(
+                "all_cues_removed",
+                f"{input_path.name} 删除空字幕后没有可写出的 cue，未写出任何文件。",
+                exit_code=1,
+                file=str(input_path),
+            )
         after_issues = check_document(fixed_doc, opts.profile)
         bad = [i for i in after_issues if i.rule == "invalid-duration"]
         if bad:

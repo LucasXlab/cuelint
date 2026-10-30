@@ -242,3 +242,12 @@ def test_suffix_dot_rejected(run, tmp_path):
     p = make(tmp_path)
     code, out, _ = run(["fix", str(p), "--suffix", ".x", "--format", "json"])
     assert code == 2 and json.loads(out)["code"] == "usage_error"
+
+
+def test_all_empty_cues_abort_without_output(run, tmp_path):
+    p = make(tmp_path, "1\n00:00:01,000 --> 00:00:02,000\n<i></i>\n\n2\n00:00:03,000 --> 00:00:04,000\n   \n")
+    code, out, _ = run(["fix", str(p), "--format", "json"])
+    assert code == 1
+    data = json.loads(out)
+    assert data["code"] == "all_cues_removed"
+    assert not (tmp_path / "a.fixed.srt").exists()
