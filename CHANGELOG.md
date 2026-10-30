@@ -12,5 +12,8 @@
 - 多文件批处理、原子写、输出预检、`--force` / `--out-dir` / `--suffix`。
 - `check` / `fix` / `profiles` / `rules` / `explain`，文本和 JSON 输出，退出码 0/1/2/3/70。
 - `CUELINT_COLOR`、`CUELINT_NOW`、`CUELINT_MAX_FILE_BYTES`。
-- 94 个 pytest 用例，离线、无固定 sleep；连续三遍通过。
+- 113 个 pytest 用例，离线、无固定 sleep；连续三遍通过。
+- 修复输出时间戳钳制到 0–3599999999ms，避免修完的文件无法再解析。
+- `--version`/`profiles`/`rules` 等不读文件的命令也会先校验 `CUELINT_*` 环境变量。
+- 无法排版或无法拆分的问题（超宽不可断词、复杂标记）在报告里标成“需人工”，不再显示为可修。
 - MIT 许可证。

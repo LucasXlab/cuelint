@@ -261,3 +261,12 @@ def test_config_huge_integer_is_config_invalid(run, tmp_path):
     code, out, _ = run(["check", str(p), "--config", str(cfg), "--format", "json"])
     assert code == 2
     assert json.loads(out)["code"] == "config_invalid"
+
+
+def test_invalid_env_fails_for_static_commands(run):
+    code, out, _ = run(["rules", "--format", "json"], env={"CUELINT_MAX_FILE_BYTES": "abc"})
+    assert code == 2
+    assert json.loads(out)["code"] == "config_invalid"
+    code, out, _ = run(["profiles", "--format", "json"], env={"CUELINT_NOW": "not-a-date"})
+    assert code == 2
+    assert json.loads(out)["code"] == "config_invalid"

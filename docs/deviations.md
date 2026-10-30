@@ -48,3 +48,9 @@ SPEC 12.3 要求“`<i>` 跨行闭合重开”；实现覆盖了行内和拆段�
 ## License
 
 选择 MIT 而不是 AGPL：CueLint 是本地 CLI，没有网络服务，不存在“修改后必须回馈服务端”的场景；MIT 降低个人创作者和小团队的使用门槛。代价是别人可以闭源分发修改版；对 0.1.0 的工具项目，这个代价可接受。
+
+## 9. 修复输出的时间戳钳制到全局上限
+
+SPEC 4.x 规定时间戳必须在 0–3599999999ms。修 `duration-too-short` / CPS 时，实现把延长上限再与 `MAX_MS` 取小；SPEC 第 5 条规则只写了“上限为 `next.start_ms - min_gap_ms` 或 `start_ms + max_duration_ms`”，没写全局上限。
+
+原因：不钳制会写出解析器拒绝的时间戳，`fix` 的输出下次 `check` 直接 `parse_error`。影响：极靠末尾的字幕最多只延到 999:59:59,999，而不是超过它。测试覆盖 `tests/test_fixer.py::test_fix_never_writes_timestamp_over_parser_limit`。

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import itertools
 import math
+import re
 from dataclasses import dataclass, field
 
 from .layout import best_layout, flatten_lines, split_text, tokenize
 from .model import Cue, Document, Fix, Snapshot
+from .parser import MAX_MS
 from .profiles import Profile, count_lines, cps, display_width, normalized_text, strip_markup, visible_chars
 from .rules import CONTROL_RE, markup_state
 
@@ -57,14 +59,15 @@ def _record(fixes: list[Fix], cue: WorkingCue, action: str, after: list[WorkingC
 
 
 def _clean_text(text: str) -> str:
-    cleaned = CONTROL_RE.sub(" ", text)
-    lines = [line for line in cleaned.split("\n")]
-    lines = [" ".join(line.split(" ")) if "  " in line else line for line in lines]
-    # Collapse runs of spaces introduced by control replacement, preserving
-    # intentional single spaces and line structure.
-    import re
+    had_control = bool(CONTROL_RE.search(text))
+    cleaned = CONTROL_RE.sub(" ", text) if had_control else text
+    lines = [line.strip(" \t") for line in cleaned.split("\n")]
+    if had_control:
+        # Collapse runs of spaces introduced by control replacement, preserving
+        # intentional double spaces when there was nothing to clean.
+        import re
 
-    lines = [re.sub(r" {2,}", " ", line).strip(" \t") for line in lines]
+        lines = [re.sub(r" {2,}", " ", line) for line in lines]
     return "\n".join(lines)
 
 
@@ -76,7 +79,8 @@ def _clean(fixes: list[Fix], cues: list[WorkingCue]) -> list[WorkingCue]:
             before = _snapshot(cue)
             cue.text = new_text
             fixes.append(Fix(cue.origin, "remove-control", before, [_snapshot(cue)], "清理控制字符。"))
-        if not strip_markup(normalized_text(cue.text)).strip():
+        plain = re.sub(r"<\s*/?\s*[ibu]\b[^>]*>|\{\\[^}]*\}", "", normalized_text(cue.text))
+        if not plain.strip():
             _record(fixes, cue, "remove-empty", [], "删除空字幕。")
             continue
         kept.append(cue)
@@ -95,6 +99,8 @@ def _clean(fixes: list[Fix], cues: list[WorkingCue]) -> list[WorkingCue]:
 def _timing(fixes: list[Fix], cues: list[WorkingCue], profile: Profile) -> None:
     cues.sort(key=lambda c: (c.start, c.origin))
     for pair_index, (prev, nxt) in enumerate(zip(cues, cues[1:])):
+        if prev.duration <= 0 or nxt.duration <= 0:
+            continue
         gap = nxt.start - prev.end
         if gap < profile.min_gap_ms:
             new_end = nxt.start - profile.min_gap_ms
@@ -104,15 +110,17 @@ def _timing(fixes: list[Fix], cues: list[WorkingCue], profile: Profile) -> None:
                 action = "trim-overlap" if gap < 0 else "trim-gap"
                 fixes.append(Fix(prev.origin, action, before, [_snapshot(prev)], f"结束时间改为 {prev.end}ms，间隔 {profile.min_gap_ms}ms。"))
                 continue
+            if gap >= 0:
+                continue
             new_start = prev.end + profile.min_gap_ms
-            if nxt.end - new_start >= profile.min_duration_ms and new_start >= 0:
+            if new_start >= 0 and nxt.end > new_start and nxt.end - new_start <= profile.max_duration_ms:
                 before = _snapshot(nxt)
                 nxt.start = new_start
                 action = "trim-overlap" if gap < 0 else "trim-gap"
                 fixes.append(Fix(nxt.origin, action, before, [_snapshot(nxt)], f"开始时间改为 {nxt.start}ms，间隔 {profile.min_gap_ms}ms。"))
                 continue
             new_end = new_start + profile.min_duration_ms
-            limit = nxt.start + profile.max_duration_ms
+            limit = min(nxt.start + profile.max_duration_ms, MAX_MS)
             if pair_index + 2 < len(cues):
                 limit = min(limit, cues[pair_index + 2].start - profile.min_gap_ms)
             # Extending the shifted cue keeps the minimum duration without
@@ -127,7 +135,7 @@ def _timing(fixes: list[Fix], cues: list[WorkingCue], profile: Profile) -> None:
         if cue.duration <= 0:
             continue
         if cue.duration < profile.min_duration_ms:
-            limit = cue.start + profile.max_duration_ms
+            limit = min(cue.start + profile.max_duration_ms, MAX_MS)
             if i + 1 < len(cues):
                 limit = min(limit, cues[i + 1].start - profile.min_gap_ms)
             if limit - cue.start >= profile.min_duration_ms and limit > cue.end:
@@ -145,7 +153,7 @@ def _extend_for_cps(fixes: list[Fix], cues: list[WorkingCue], profile: Profile) 
         if chars == 0 or cps(cue.text, cue.duration) <= profile.max_cps:
             continue
         needed = cue.start + math.ceil(chars / profile.max_cps * 1000)
-        limit = cue.start + profile.max_duration_ms
+        limit = min(cue.start + profile.max_duration_ms, MAX_MS)
         if i + 1 < len(cues):
             limit = min(limit, cues[i + 1].start - profile.min_gap_ms)
         target = min(needed, limit)
@@ -203,12 +211,12 @@ def _split(fixes: list[Fix], cues: list[WorkingCue], i: int, profile: Profile, r
     max_count = 8
     min_count = max(2, math.ceil(cue.duration / profile.max_duration_ms)) if cue.duration > profile.max_duration_ms else 2
     original_cps = cps(cue.text, cue.duration)
+    if original_cps > profile.max_cps:
+        # Splitting adds gaps, so it can only make a too-fast cue worse.
+        return False
     for count in range(min_count, max_count + 1):
         chunks = split_text(cue.text, count, profile.max_line_width, profile.max_lines)
         if chunks is None:
-            continue
-        if original_cps > profile.max_cps:
-            # Splitting adds gaps, so it can only make a too-fast cue worse.
             continue
         made = _allocate(cue, chunks, profile)
         if made is None:
@@ -245,6 +253,9 @@ def _fit_one(fixes: list[Fix], cues: list[WorkingCue], i: int, profile: Profile)
 def _duration_split(fixes: list[Fix], cues: list[WorkingCue], i: int, profile: Profile) -> bool:
     cue = cues[i]
     if cue.duration <= profile.max_duration_ms:
+        return False
+    complex_markup, _ = markup_state(cue.text)
+    if complex_markup:
         return False
     if _split(fixes, cues, i, profile, "时长"):
         return True

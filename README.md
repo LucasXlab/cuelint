@@ -16,7 +16,7 @@
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
   <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-0f766e">
-  <img alt="Tests 94 passed" src="https://img.shields.io/badge/tests-94%20passed-2f855a">
+  <img alt="Tests 113 passed" src="https://img.shields.io/badge/tests-113%20passed-2f855a">
   <img alt="No network" src="https://img.shields.io/badge/network-none-4a5568">
 </p>
 
@@ -160,7 +160,7 @@ pip install -e '.[test]'
 python -m pytest
 ```
 
-测试不联网，全部在临时目录运行；连续三遍通过。当前 94 个用例，最近一次三遍均为 `94 passed`。
+测试不联网，全部在临时目录运行；连续三遍通过。当前 113 个用例，最近一次三遍均为 `113 passed`。
 
 ## 发布前还需要你做什么
 

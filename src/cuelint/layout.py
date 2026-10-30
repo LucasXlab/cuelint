@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from .profiles import display_width, normalized_text
 
 TAG_RE = re.compile(r"<[^>]*>|\{\\[^}]*\}")
-CLOSING_PUNCT = set("。，、！？；：,.!?;:)]}）】》”’…")
-OPENING_PUNCT = set("([{（【《“‘")
+CLOSING_PUNCT = set("。，、！？；：,.!?;:)]}）】》」』〉”’…")
+OPENING_PUNCT = set("([{（【《〈「『“‘")
 
 
 @dataclass(frozen=True)

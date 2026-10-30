@@ -81,3 +81,24 @@ def test_order_is_rule_then_cue():
 def test_parser_rule_integration_vtt():
     d = parse_bytes(b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n" + "中".encode() * 20 + b"\n")
     assert "line-too-long" in [i.rule for i in check_document(d, BUILTINS["cjk"])]
+
+
+def test_self_closing_markup_is_manual():
+    assert "complex-markup" in [i.rule for i in by_rule(doc((0, 2000, "<br/>hi")), "latin")]
+    assert "unbalanced-markup" in [i.rule for i in by_rule(doc((0, 2000, "<i/>hi")), "latin")]
+
+
+def test_layout_fixability_reflects_whether_a_fix_exists():
+    long_token = doc((0, 20000, "x" * 100))
+    issues = {i.rule: i for i in by_rule(long_token, "latin")}
+    assert issues["duration-too-long"].fixable is False
+    assert issues["line-too-long"].fixable is False
+    splittable = doc((0, 20000, "一" * 40))
+    issues = {i.rule: i for i in by_rule(splittable, "cjk")}
+    assert issues["duration-too-long"].fixable is True
+
+
+def test_cjk_corner_brackets_are_cjk_tokens():
+    from cuelint.layout import tokenize
+
+    assert [t.kind for t in tokenize("「a」")] == ["cjk", "word", "cjk"]

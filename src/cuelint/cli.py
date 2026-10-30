@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .config import build_profile, color_mode, max_file_bytes
+from .config import build_profile, color_mode, max_file_bytes, now_utc
 from .errors import CueLintError
 from .model import Report
 from .profiles import BUILTINS, as_dict
@@ -239,6 +239,8 @@ def main(argv: list[str] | None = None) -> int:
         # Environment validation happens even for commands that do not use it,
         # so a broken environment fails before any file is touched.
         color_mode()
+        max_file_bytes()
+        now_utc()
         args = build_parser().parse_args(argv)
         if args.command == "check":
             return _run_files(args, "check")

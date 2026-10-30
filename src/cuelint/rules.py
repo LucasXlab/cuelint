@@ -6,8 +6,9 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from .layout import best_layout, split_text, tokenize
 from .model import Cue, Document, Issue
-from .parser import format_timestamp
+from .parser import MAX_MS, format_timestamp
 from .profiles import Profile, count_lines, cps, display_width, normalized_text, strip_markup, visible_chars
 
 
@@ -45,7 +46,9 @@ ANY_TAG_RE = re.compile(r"<[^>]*>|\{\\[^}]*\}")
 
 
 def _excerpt(text: str, limit: int = 80) -> str:
-    plain = " ".join(strip_markup(normalized_text(text)).split())
+    plain = strip_markup(normalized_text(text))
+    plain = re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", plain)
+    plain = " ".join(plain.split())
     out: list[str] = []
     width = 0
     for ch in plain:
@@ -72,6 +75,18 @@ def _issue(rule: str, cue: Cue, message: str, fixable: bool, **details) -> Issue
     )
 
 
+def _layout_fixable(text: str, profile: Profile, rule: str, duration: int) -> bool:
+    if rule in {"line-too-long", "too-many-lines"}:
+        return best_layout(tokenize(text), profile.max_line_width, profile.max_lines) is not None
+    if rule == "duration-too-long":
+        minimum = max(2, (duration + profile.max_duration_ms - 1) // profile.max_duration_ms)
+        for count in range(minimum, 9):
+            if split_text(text, count, profile.max_line_width, profile.max_lines) is not None:
+                return True
+        return False
+    return True
+
+
 def markup_state(text: str) -> tuple[bool, bool]:
     """Return (complex, unbalanced) for a cue text."""
     tags = list(ANY_TAG_RE.finditer(text))
@@ -87,8 +102,10 @@ def markup_state(text: str) -> tuple[bool, bool]:
             stack.pop()
         else:
             body = m.group(0)
-            if body.endswith("/>") or body.lower().startswith("<br"):
+            if body.lower().startswith("<br"):
                 return True, False
+            if body.endswith("/>"):
+                return False, True
             stack.append(name)
     return False, bool(stack)
 
@@ -112,7 +129,7 @@ def check_document(doc: Document, profile: Profile) -> list[Issue]:
     for cue in doc.cues:
         text = normalized_text(cue.text)
         duration = cue.end_ms - cue.start_ms
-        plain = strip_markup(text)
+        plain = re.sub(r"<\s*/?\s*[ibu]\b[^>]*>|\{\\[^}]*\}", "", text)
         if not plain.strip():
             issues.append(_issue("empty-cue", cue, "字幕文本为空。", True))
         if cue.index in dupes:
@@ -143,7 +160,7 @@ def check_document(doc: Document, profile: Profile) -> list[Issue]:
                         "duration-too-long",
                         cue,
                         f"停留 {duration}ms，超过上限 {profile.max_duration_ms}ms。",
-                        True,
+                        _layout_fixable(text, profile, "duration-too-long", duration),
                         actualMs=duration,
                         maxMs=profile.max_duration_ms,
                     )
@@ -172,7 +189,7 @@ def check_document(doc: Document, profile: Profile) -> list[Issue]:
                         "line-too-long",
                         cue,
                         f"第 {lineno} 行 {width} 列，超过上限 {profile.max_line_width} 列。",
-                        not complex_markup,
+                        (not complex_markup) and _layout_fixable(text, profile, "line-too-long", duration),
                         line=lineno,
                         width=width,
                         limit=profile.max_line_width,
@@ -187,7 +204,7 @@ def check_document(doc: Document, profile: Profile) -> list[Issue]:
                     "too-many-lines",
                     cue,
                     f"有 {nlines} 行，超过上限 {profile.max_lines} 行。",
-                    not complex_markup,
+                    (not complex_markup) and _layout_fixable(text, profile, "too-many-lines", duration),
                     lines=nlines,
                     limit=profile.max_lines,
                 )

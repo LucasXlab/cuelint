@@ -79,9 +79,13 @@ def parse_bytes(data: bytes, *, source: str = "", max_bytes: int = 20 * 1024 * 1
     for number, line in enumerate(lines, 1):
         if len(line) > MAX_LINE:
             raise _err(f"第 {number} 行有 {len(line)} 个字符，超过单行上限 {MAX_LINE}。", file=source, line=number)
+    encoding = "utf-8-sig" if data.startswith(b"\xef\xbb\xbf") else "utf-8"
     if lines and lines[0].startswith("WEBVTT"):
-        return _parse_vtt(lines, source=source)
-    return _parse_srt(lines, source=source)
+        doc = _parse_vtt(lines, source=source)
+    else:
+        doc = _parse_srt(lines, source=source)
+    doc.encoding = encoding
+    return doc
 
 
 def parse_file(path: str | Path, *, max_bytes: int = 20 * 1024 * 1024) -> Document:
@@ -152,7 +156,7 @@ def _parse_vtt(lines: list[str], *, source: str) -> Document:
         header.append(rest)
     i = 1
     while i < len(lines) and lines[i].strip() != "":
-        header.append(lines[i].strip())
+        header.append(lines[i])
         i += 1
     if len(header) > 100:
         raise _err("WebVTT 头部超过 100 行。", file=source, line=1)
@@ -183,7 +187,7 @@ def _parse_vtt(lines: list[str], *, source: str) -> Document:
                 pos = 1
                 identifier = block[0]
             timing = block[pos]
-            start_ms, end_ms, settings = _parse_timing(timing, file=source, line_number=block_start + pos + 1)
+            start_ms, end_ms, settings = _parse_timing(timing, file=source, line_number=block_start + pos + 1, allow_short=True)
             text = "\n".join(block[pos + 1 :])
             cues.append(
                 Cue(
@@ -205,13 +209,19 @@ def _parse_vtt(lines: list[str], *, source: str) -> Document:
     return Document(format="vtt", cues=cues, header_lines=header, source_path=source, encoding="utf-8")
 
 
-def _parse_timing(raw: str, *, file: str, line_number: int | None = None) -> tuple[int, int, str]:
+def _parse_timing(raw: str, *, file: str, line_number: int | None = None, allow_short: bool = False) -> tuple[int, int, str]:
     if "-->" not in raw:
         raise _err("时间行缺少 -->。", file=file, line=line_number)
     left, right = raw.split("-->", 1)
-    start_ms = parse_timestamp(left.strip(), file=file, line=line_number or 0)
+    start_raw = left.strip()
+    if not allow_short and start_raw.count(":") == 1:
+        raise _err(f"SRT 开始时间必须是 H:MM:SS,mmm：{start_raw!r}。", file=file, line=line_number)
+    start_ms = parse_timestamp(start_raw, file=file, line=line_number or 0)
     right = right.strip()
-    match = TIMESTAMP_RE.match(right.split(" ", 1)[0].split("\t", 1)[0])
+    end_raw = right.split(" ", 1)[0].split("\t", 1)[0]
+    if not allow_short and end_raw.count(":") == 1:
+        raise _err(f"SRT 结束时间必须是 H:MM:SS,mmm：{end_raw!r}。", file=file, line=line_number)
+    match = TIMESTAMP_RE.match(end_raw)
     if not match:
         raise _err(f"结束时间格式不正确：{right!r}。", file=file, line=line_number)
     token = match.group(0)

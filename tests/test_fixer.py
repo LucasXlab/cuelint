@@ -122,3 +122,27 @@ def test_split_at_most_eight_segments():
     text = "一二三四五六七八九十" * 10
     out, _ = fix(f"1\n00:00:00,000 --> 00:01:40,000\n{text}\n")
     assert len(out.cues) <= 8
+
+
+def test_fix_never_writes_timestamp_over_parser_limit():
+    from cuelint.parser import MAX_MS
+
+    out, fixes = fix("1\n999:59:58,000 --> 999:59:58,500\nHi\n")
+    assert fixes
+    assert max(c.end_ms for c in out.cues) <= MAX_MS
+    assert out.cues[0].end_ms == MAX_MS
+    parse_bytes(serialize(out).encode())
+
+
+def test_zero_duration_cue_is_left_for_manual_review():
+    out, _ = fix("1\n00:00:00,000 --> 00:00:00,000\nHi\n\n2\n00:00:00,500 --> 00:00:02,000\nThere\n")
+    assert len(out.cues) == 2
+    assert (out.cues[0].start_ms, out.cues[0].end_ms) == (0, 0)
+    assert "invalid-duration" in [i.rule for i in check_document(out, CJK)]
+
+
+def test_complex_markup_duration_is_not_split():
+    text = "<font color=red>" + "一" * 40 + "</font>"
+    out, _ = fix(f"1\n00:00:00,000 --> 00:00:20,000\n{text}\n")
+    assert len(out.cues) == 1
+    assert "duration-too-long" in [i.rule for i in check_document(out, CJK)]
