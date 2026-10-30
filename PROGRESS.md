@@ -11,13 +11,14 @@
 - 测试：88 个 pytest 用例，连续三遍全部通过；原始输出在 `notes/test-runs.txt`。
 - 仓库内提交，未配置 remote，未推送。
 
-## 进行中
+## 已完成（阶段 4/5）
 
-- 阶段 4：README 后从空目录安装、真实使用、截图、三路独立审查。
-
-## 下一步
-
-- 阶段 5：README/README_EN、docs/features、development、deviations、deploy、CI、LICENSE、CHANGELOG、.env.example、launch 材料、v0.1.0 标签和最终总结。
+- 从空目录克隆、venv、`pip install .` 安装成功；记录在 `notes/安装实录.md`。
+- 11 次真实使用（含 5 条失败路径），记录在 `notes/真实使用.md`。
+- 三路独立审查（新用户、安全/数据、正确性）发现并修复；记录在 `notes/审查记录.md`。
+- 双语 README、功能/开发/偏差/部署文档、CI、MIT LICENSE、CHANGELOG、.env.example、launch 草稿、浅色/深色/375px 截图。
+- 最终 113 个 pytest 用例，连续三遍通过；记录在 `notes/test-runs.txt`。
+- 本地提交和 `v0.1.0` 标签；没有 remote，没有推送。
 
 ## 已知问题
 
